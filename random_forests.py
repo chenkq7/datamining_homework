@@ -102,16 +102,44 @@ class PredVoter:
 
 
 class TreeNode:
-    def __init__(self, X, y, features, epsilon=0):
+    def __init__(self):
         self.is_leaf = None
         # leaf
-        self.prob = self.calculate_probability(y)
+        self.prob = None
         # inner
         self.feature = None
         self.children = {}
         # build
-        self.entropy = self.calculate_entropy(y)
-        self.build_tree(X, y, features, epsilon)
+        self.entropy = None
+
+    def save_json(self):
+        child_state_dict = {}
+        for child, node in self.children.items():
+            child_state_dict[child] = node.save_json()
+        state_dict = {
+            'is_leaf': self.is_leaf,
+            'prob': list(self.prob.items()),
+            'feature': self.feature,
+            'entropy': self.entropy,
+            'children': list(child_state_dict.items())
+        }
+        import json
+        ret = json.dumps(state_dict)
+        return ret
+
+    @staticmethod
+    def load_json(json_str):
+        import json
+        state_dict = json.loads(json_str)
+        self = TreeNode()
+        self.is_leaf = state_dict['is_leaf']
+        self.prob = dict(state_dict['prob'])
+        self.feature = state_dict['feature']
+        self.entropy = state_dict['entropy']
+        child_state_dict = dict(state_dict['children'])
+        for child, child_str in child_state_dict.items():
+            self.children[child] = TreeNode.load_json(child_str)
+        return self
 
     def predict(self, x):
         if self.is_leaf:
@@ -123,7 +151,12 @@ class TreeNode:
     def build_tree(self, X, y, features, epsilon=0):
         X = np.asarray(X)
         y = np.asarray(y)
+        features = np.asarray(list(features)).tolist()
+        assert isinstance(features, list)
         features = set(features)
+        self.prob = self.calculate_probability(y)
+        self.entropy = self.calculate_entropy(y)
+
         # only one label  or  features is empty set
         if len(set(y)) == 1 or (not features):
             self.is_leaf = True
@@ -141,10 +174,14 @@ class TreeNode:
         # split and build recursive
         self.feature = best_fea
         fea_child = features.difference({best_fea})
-        fea_value = set(X[:, best_fea])
+        fea_value = np.asarray(X[:, best_fea]).tolist()
+        assert isinstance(fea_value, list)
+        fea_value = set(fea_value)
         for value in fea_value:
             idx_ = X[:, best_fea] == value
-            self.children[value] = TreeNode(X[idx_], y[idx_], fea_child, epsilon)
+            self.children[value] = TreeNode()
+            self.children[value].build_tree(X[idx_], y[idx_], fea_child, epsilon)
+        return self
 
     def calculate_gain_rate(self, X, y, feature):
         if len(set(X[:, feature])) == 1:
@@ -164,7 +201,7 @@ class TreeNode:
             v_num = (y == v).sum()
             prob = v_num / len(y)
             entropy -= prob * np.log2(prob)
-        return entropy
+        return float(entropy)
 
     @staticmethod
     def calculate_condition_entropy(X, y, feature):
@@ -178,6 +215,8 @@ class TreeNode:
 
     @staticmethod
     def calculate_probability(y):
+        y = np.asarray(y).tolist()
+        assert isinstance(y, list)
         predict = {}
         for y_item in y:
             predict[y_item] = predict.get(y_item, 0) + 1
@@ -188,7 +227,7 @@ class TreeNode:
 
 class DecisionTree:
     def __init__(self, columns):
-        self.columns = columns
+        self.columns = list(columns) if columns is not None else None
         self.tree = None
 
     def fit(self, X, y, epsilon=0):
@@ -200,7 +239,24 @@ class DecisionTree:
         X = np.asarray(X)
         y = np.asarray(y)
         features = set(list(range(X.shape[-1])))
-        self.tree = TreeNode(X, y, features, epsilon)
+        self.tree = TreeNode().build_tree(X, y, features, epsilon)
+        return self
+
+    def save_json(self):
+        import json
+        state_dict = {
+            'columns': self.columns,
+            'tree': self.tree.save_json()
+        }
+        return json.dumps(state_dict)
+
+    @staticmethod
+    def load_json(json_str):
+        import json
+        self = DecisionTree(columns=None)
+        state_dict = json.loads(json_str)
+        self.columns = state_dict['columns']
+        self.tree = TreeNode.load_json(state_dict['tree'])
         return self
 
     def predict(self, X):
@@ -230,6 +286,31 @@ class RandomForest:
         self._id = None
         self._label = None
         self._pred = 'pred'
+
+    def save_json(self):
+        import json
+        state_dict = {
+            'tree_num': self.tree_num,
+            'attr_num': self.attr_num,
+            'trees': [tree.save_json() for tree in self.trees],
+            '_id': self._id,
+            '_label': self._label,
+            '_pred': self._pred,
+        }
+        return json.dumps(state_dict)
+
+    @staticmethod
+    def load_json(json_str):
+        import json
+        state_dict = json.loads(json_str)
+        self = RandomForest(tree_num=None)
+        self.tree_num = state_dict['tree_num']
+        self.attr_num = state_dict['attr_num']
+        self.trees = [DecisionTree.load_json(tree_str) for tree_str in state_dict['trees']]
+        self._id = state_dict['_id']
+        self._label = state_dict['_label']
+        self._pred = state_dict['_pred']
+        return self
 
     def fit(self, x_data, y_data):
         """
