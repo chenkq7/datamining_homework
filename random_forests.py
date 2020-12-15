@@ -112,10 +112,10 @@ class TreeNode:
         # build
         self.entropy = None
 
-    def save_json(self):
+    def state_dict(self):
         child_state_dict = {}
         for child, node in self.children.items():
-            child_state_dict[child] = node.save_json()
+            child_state_dict[child] = node.state_dict()
         state_dict = {
             'is_leaf': self.is_leaf,
             'prob': list(self.prob.items()),
@@ -123,22 +123,18 @@ class TreeNode:
             'entropy': self.entropy,
             'children': list(child_state_dict.items())
         }
-        import json
-        ret = json.dumps(state_dict)
-        return ret
+        return state_dict
 
     @staticmethod
-    def load_json(json_str):
-        import json
-        state_dict = json.loads(json_str)
+    def load(state_dict):
         self = TreeNode()
         self.is_leaf = state_dict['is_leaf']
         self.prob = dict(state_dict['prob'])
         self.feature = state_dict['feature']
         self.entropy = state_dict['entropy']
         child_state_dict = dict(state_dict['children'])
-        for child, child_str in child_state_dict.items():
-            self.children[child] = TreeNode.load_json(child_str)
+        for child, child_state_dict in child_state_dict.items():
+            self.children[child] = TreeNode.load(child_state_dict)
         return self
 
     def predict(self, x):
@@ -242,21 +238,17 @@ class DecisionTree:
         self.tree = TreeNode().build_tree(X, y, features, epsilon)
         return self
 
-    def save_json(self):
-        import json
-        state_dict = {
+    def state_dict(self):
+        return {
             'columns': self.columns,
-            'tree': self.tree.save_json()
+            'tree': self.tree.state_dict()
         }
-        return json.dumps(state_dict)
 
     @staticmethod
-    def load_json(json_str):
-        import json
+    def load(state_dict):
         self = DecisionTree(columns=None)
-        state_dict = json.loads(json_str)
         self.columns = state_dict['columns']
-        self.tree = TreeNode.load_json(state_dict['tree'])
+        self.tree = TreeNode.load(state_dict['tree'])
         return self
 
     def predict(self, X):
@@ -287,26 +279,23 @@ class RandomForest:
         self._label = None
         self._pred = 'pred'
 
-    def save_json(self):
-        import json
+    def state_dict(self):
         state_dict = {
             'tree_num': self.tree_num,
             'attr_num': self.attr_num,
-            'trees': [tree.save_json() for tree in self.trees],
+            'trees': [tree.state_dict() for tree in self.trees],
             '_id': self._id,
             '_label': self._label,
             '_pred': self._pred,
         }
-        return json.dumps(state_dict)
+        return state_dict
 
     @staticmethod
-    def load_json(json_str):
-        import json
-        state_dict = json.loads(json_str)
+    def load(state_dict):
         self = RandomForest(tree_num=None)
         self.tree_num = state_dict['tree_num']
         self.attr_num = state_dict['attr_num']
-        self.trees = [DecisionTree.load_json(tree_str) for tree_str in state_dict['trees']]
+        self.trees = [DecisionTree.load(tree_str) for tree_str in state_dict['trees']]
         self._id = state_dict['_id']
         self._label = state_dict['_label']
         self._pred = state_dict['_pred']
@@ -371,6 +360,24 @@ class RandomForest:
         return 0
 
 
+def save_state_dict(state_dict, filename):
+    import json
+    js = json.dumps(state_dict)
+    if not str(filename).endswith('.json'):
+        filename += '.json'
+    with open(filename, 'w') as f:
+        f.write(js)
+
+
+def load_state_dict(filename):
+    import json
+    if not str(filename).endswith('.json'):
+        filename += '.json'
+    with open(filename, 'r') as f:
+        js = f.read()
+        return json.loads(js)
+
+
 if __name__ == '__main__':
     x_data = pd.read_csv("./dataset/线下/rf/x_train.csv")
     y_data = pd.read_csv("./dataset/线下/rf/y_train.csv")
@@ -382,7 +389,7 @@ if __name__ == '__main__':
     x_val = x_data.iloc[idx_val]
     y_val = y_data.iloc[idx_val]
 
-    rf = RandomForest(30)
+    rf = RandomForest(200)
     rf = rf.fit(x_train, y_train)
     print(rf.f1_score_on_oob())
     print(rf.f1_score(x_val, y_val))
