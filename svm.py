@@ -78,7 +78,7 @@ if __name__ == '__main__':
     from sklearn.preprocessing import StandardScaler
     import time
 
-    svc = make_pipeline(StandardScaler(), svm.SVC())
+    svc = make_pipeline(StandardScaler(), svm.SVC(C=1, kernel='linear'))
     start = time.time()
     svc.fit(x_train, y_train)
     end = time.time()
