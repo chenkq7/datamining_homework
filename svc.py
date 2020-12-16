@@ -23,10 +23,11 @@ class Kernel:
 
 
 class SVC:
-    def __init__(self, c=1, kernel='linear', sigma=1.0, epsilon=1e-3):
+    def __init__(self, c=1, kernel='linear', sigma=1.0, epsilon=1e-3, verbose=False):
         self.kernel_fn = Kernel.dispatch(kernel, sigma)
         self.C = c
         self.epsilon = epsilon
+        self.verbose = verbose
         # during fitting
         self._alpha = None
         self._b = None
@@ -52,7 +53,7 @@ class SVC:
         self._gram = self.kernel_fn(X, X)
         #
         self._alpha = np.random.random(len(X)) * min(self.C, 1)
-        self._b = np.random.random(len(X)) * min(self.C, 1)
+        self._b = np.random.random(1) * min(self.C, 1)
         self._w = self._alpha * self._y
         self._predict_cache = np.dot(self._w, self._gram) + self._b
 
@@ -62,13 +63,18 @@ class SVC:
         for epoch in range(epochs):
             idx1 = self._pick_first_alpha()
             if idx1 is None:
+                if self.verbose:
+                    print('fit iter:', epoch)
                 return self
             idx2 = self._pick_second_alpha(idx1)
             self._update_alpha(idx1, idx2)
         self.fit_reach_epochs_end = True
+        if self.verbose:
+            print('fit iter:', epochs)
+            print('alpha error:', self._pick_first_alpha(return_err=True))
         return self
 
-    def _pick_first_alpha(self):
+    def _pick_first_alpha(self, return_err=False):
         # assert (self._alpha >= 0).all(), self._alpha
         cond1 = self._alpha <= 0
         cond2 = np.logical_and(0 < self._alpha, self._alpha < self.C)
@@ -79,7 +85,10 @@ class SVC:
         err[np.logical_and(cond3, err < 0)] = 0
         err = err ** 2
         idx = np.argmax(err)
-        # print(err[idx])
+        if self.verbose:
+            print(err[idx])
+        if return_err:
+            return err[idx]
         if err[idx] < self.epsilon:
             return
         return idx
@@ -144,7 +153,7 @@ if __name__ == '__main__':
 
     from sklearn import svm
 
-    svc = SVC(c=100)
+    svc = SVC(c=100, verbose=True)
     # svc = svm.SVC(C=100, kernel='linear')
     svc.fit(x, y)
     print(svc.predict(x))
