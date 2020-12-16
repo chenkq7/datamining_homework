@@ -44,6 +44,21 @@ def nominal2binary(data, nominals):
     return data[columns]
 
 
+def f1_score(y_true, y_pred, pos_label=1, labels=None):
+    y_true = np.asarray(y_true)
+    y_pred = np.asarray(y_pred)
+    if labels is None:
+        labels = set(y_true)
+    assert not set(y_true).difference(labels)
+    assert not set(y_pred).difference(labels)
+    pos_pred = (y_pred == pos_label).sum()
+    pos_true = (y_true == pos_label).sum()
+    tp = np.logical_and(y_true == pos_label, y_pred == pos_label).sum()
+    precision = tp / pos_pred if pos_pred else 0
+    recall = tp / pos_true if pos_true else 0
+    return 2 * precision * recall / (precision + recall) if precision + recall else 0
+
+
 if __name__ == '__main__':
     data = pd.read_csv("./dataset/线下/svm/svm_training_set.csv")
     idx_train = np.random.choice(len(data), int(9 / 10 * len(data)))
@@ -60,13 +75,23 @@ if __name__ == '__main__':
 
     from sklearn import svm
     from sklearn.pipeline import make_pipeline
-    from sklearn.preprocessing import MinMaxScaler
+    from sklearn.preprocessing import StandardScaler
     import time
 
-    svc = make_pipeline(MinMaxScaler(), svm.SVC(kernel='linear'))
+    svc = make_pipeline(StandardScaler(), svm.SVC())
     start = time.time()
     svc.fit(x_train, y_train)
     end = time.time()
     print(end - start)
-    print(svc.score(x_train, y_train))
-    print(svc.score(x_val, y_val))
+    pred = svc.predict(x_val)
+    print(f1_score(y_val, pred))
+    print((np.asarray(y_val) == np.asarray(pred)).mean())
+
+    """
+    me notices:
+    1. if use nominal2binary, the linear SVM is enough.
+    2. if not use, the SVM kernel should be poly or rbf.
+    3. even use nominal2binary, doesn't improve the poly/rbf kernel accuracy.
+    4. forget use f1_score to evaluate the result.
+    5. oh. f1_score is really low.
+    """
