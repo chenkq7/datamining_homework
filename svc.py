@@ -69,7 +69,7 @@ class SVC:
         return self
 
     def _pick_first_alpha(self):
-        assert (self._alpha >= 0).all()
+        # assert (self._alpha >= 0).all(), self._alpha
         cond1 = self._alpha <= 0
         cond2 = np.logical_and(0 < self._alpha, self._alpha < self.C)
         cond3 = self._alpha >= self.C
@@ -100,7 +100,7 @@ class SVC:
         E1 = self._predict_cache[idx1] - y1
         E2 = self._predict_cache[idx2] - y2
         eta = self._gram[idx1][idx1] + self._gram[idx2][idx2] - 2 * self._gram[idx1][idx2]
-        alpha2_new_unc = self._alpha[idx2] + y2 * (E2 - E1) / eta
+        alpha2_new_unc = self._alpha[idx2] + y2 * (E1 - E2) / eta
         #
         alpha2_new = np.clip(alpha2_new_unc, l, h)
         alpha1_new = self._alpha[idx1] + y1 * y2 * (self._alpha[idx2] - alpha2_new)
@@ -139,13 +139,13 @@ class SVC:
 
 
 if __name__ == '__main__':
-    x = np.array([[0, 0], [1, 1], [0, 1], [1, 0], [2, 1]])
+    x = np.array([[0, 0], [1, 1], [0, 1], [1, 0], [2, 0]])
     y = np.array([-1, 1, -1, -1, 1])
 
     from sklearn import svm
 
-    # svc = SVC()
-    svc = svm.SVC(C=100, kernel='linear')
+    svc = SVC(c=100)
+    # svc = svm.SVC(C=100, kernel='linear')
     svc.fit(x, y)
     print(svc.predict(x))
     # print(svc.fit_reach_epochs_end)
