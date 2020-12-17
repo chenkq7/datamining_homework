@@ -70,22 +70,49 @@ if __name__ == '__main__':
     y_train = data.iloc[idx_train, 12]
     y_val = data.iloc[idx_val, 12]
 
+    y_neg_idx = np.arange(len(y_train))[y_train<0]
+    y_neg_idx_sam = np.random.choice(y_neg_idx,6000,replace=False)
+    y_pos_idx_sam = np.arange(len(y_train))[y_train>0]
+    idx_sample = np.concatenate((y_neg_idx_sam,y_pos_idx_sam))
+
+    x_train = x_train.iloc[idx_sample]
+    y_train = y_train.iloc[idx_sample]
+
+
+    for col in x_train.columns.values:
+        if str(col).startswith(tuple(nominals)):
+            max_v = np.max(x_train[col])
+            min_v = np.min(x_train[col])
+            if max_v != min_v:
+                x_train[col] = (x_train[col] - min_v) / (max_v - min_v)
+                x_val[col] = (x_val[col] - min_v) / (max_v - min_v)
+        else:
+            mean = np.mean(x_train[col])
+            std = np.std(x_train[col])
+            x_train[col] = (x_train[col] - mean) / std
+            x_val[col] = (x_val[col] - mean) / std
+
     print(pd.DataFrame(x_train).columns.values)
     print(pd.DataFrame(y_train).columns.values)
 
     from sklearn import svm
-    from sklearn.pipeline import make_pipeline
-    from sklearn.preprocessing import StandardScaler
     import time
 
-    svc = make_pipeline(StandardScaler(), svm.SVC(C=1, kernel='linear'))
+    svc = svm.SVC(C=1, kernel='linear', verbose=True)
     start = time.time()
     svc.fit(x_train, y_train)
     end = time.time()
     print(end - start)
     pred = svc.predict(x_val)
-    print(f1_score(y_val, pred))
+    # print(f1_score(y_val, pred))
     print((np.asarray(y_val) == np.asarray(pred)).mean())
+
+    from sklearn import metrics
+
+    val_pred = pred
+    print(metrics.f1_score(y_val, val_pred))
+    print(metrics.recall_score(y_val, val_pred))
+    print(metrics.accuracy_score(y_val, val_pred))
 
     """
     me notices:
