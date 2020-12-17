@@ -36,30 +36,9 @@ def f1_score(y_true, y_pred, pos_label=1, labels=None):
     return 2 * precision * recall / (precision + recall) if precision + recall else 0
 
 
-class Kernel:
-    @staticmethod
-    def linear(sigma):
-        return lambda x, y: np.inner(x, y)
-
-    # @staticmethod
-    # def gaussian(sigma):
-    #     return lambda x, y: np.exp(-np.sqrt(np.linalg.norm(x - y) ** 2 / (2 * sigma ** 2)))
-
-    @classmethod
-    def dispatch(cls, name, sigma):
-        try:
-            return getattr(cls, name)(sigma)
-        except AttributeError:
-            raise ValueError("kernel choice must in list: " + str(cls._get_kernel_list()))
-
-    @classmethod
-    def _get_kernel_list(cls):
-        return [method for method, _type_str in cls.__dict__.items() if "staticmethod object" in str(_type_str)]
-
-
-class SVC:
-    def __init__(self, c=1, kernel='linear', sigma=1.0, epsilon=1e-3, verbose=False):
-        self.kernel_fn = Kernel.dispatch(kernel, sigma)
+class LinearSVC:
+    def __init__(self, c=1, epsilon=1e-3, verbose=False):
+        self.kernel_fn = np.inner
         self.C = c
         self.epsilon = epsilon
         self.verbose = verbose
@@ -74,6 +53,28 @@ class SVC:
         self._gram = None
         # monitor
         self.fit_reach_epochs_end = None
+
+    def state_dict(self):
+        ret = {
+            'C': self.C,
+            'epsilon': self.epsilon,
+            'verbose': self.verbose,
+            '_alpha': self._alpha.tolist(),
+            '_b': self._b.tolist(),
+            '_X': self._X.tolist(),
+            '_y': self._y.tolist(),
+        }
+        return ret
+
+    @staticmethod
+    def load(state_dict):
+        self = LinearSVC(c=state_dict['C'], epsilon=state_dict['epsilon'], verbose=state_dict['verbose'])
+        self._alpha = np.asarray(state_dict['_alpha'])
+        self._b = np.asarray(state_dict['_b'])
+        self._X = np.asarray(state_dict['_X'])
+        self._y = np.asarray(state_dict['_y'])
+        self._w = self._alpha * self._y
+        return self
 
     def predict(self, X, return_raw=False):
         X = self.kernel_fn(self._X, np.atleast_2d(X))
@@ -197,8 +198,8 @@ if __name__ == '__main__':
     y_val = data.iloc[idx_val, 12]
 
     y_neg_idx = np.arange(len(y_train))[y_train < 0]
-    y_neg_idx_sam = np.random.choice(y_neg_idx, 6000, replace=False)
     y_pos_idx_sam = np.arange(len(y_train))[y_train > 0]
+    y_neg_idx_sam = np.random.choice(y_neg_idx, len(y_pos_idx_sam), replace=False)
     idx_sample = np.concatenate((y_neg_idx_sam, y_pos_idx_sam))
     idx_sample = np.random.choice(idx_sample, 2000, replace=False)
 
@@ -221,7 +222,7 @@ if __name__ == '__main__':
     print(pd.DataFrame(x_train).columns.values)
     print(pd.DataFrame(y_train).columns.values)
 
-    svc = SVC(c=1, verbose=True)
+    svc = LinearSVC(c=1, verbose=True)
     svc.fit(x_train, y_train, epochs=int(1e5))
 
     val_pred = svc.predict(x_val)
