@@ -272,11 +272,11 @@ class Model:
         self.svc = LinearSVC.load(state_dict['svc'])
         return self
 
-    def fit(self, x, y):
+    def fit(self, x, y, epochs=int(1e5)):
         x = self.pp.nominal2binary(x)
         self.pp.normalization_init(x)
         x = self.pp.normalize(x)
-        self.svc.fit(x, y)
+        self.svc.fit(x, y, epochs=epochs)
 
     def predict(self, x):
         x = self.pp.nominal2binary(x)
@@ -285,46 +285,41 @@ class Model:
 
 
 if __name__ == '__main__':
+    # div data into trainset valset
     data = pd.read_csv("./dataset/线下/svm/svm_training_set.csv")
     idx_train = np.random.choice(len(data), int(9 / 10 * len(data)))
-    idx_val = list(set(list(range(len(data)))).difference(idx_train))
     x_train = data.iloc[idx_train, :12]
-    x_val = data.iloc[idx_val, :12]
-
     y_train = data.iloc[idx_train, 12]
+    idx_val = list(set(list(range(len(data)))).difference(idx_train))
+    x_val = data.iloc[idx_val, :12]
     y_val = data.iloc[idx_val, 12]
 
+    # sample among trainset to
+    # 1. balance the pos/neg data
+    # 2. make dataset small enough to feed into my svc
     y_neg_idx = np.arange(len(y_train))[y_train < 0]
     y_pos_idx_sam = np.arange(len(y_train))[y_train > 0]
     y_neg_idx_sam = np.random.choice(y_neg_idx, len(y_pos_idx_sam), replace=False)
     idx_sample = np.concatenate((y_neg_idx_sam, y_pos_idx_sam))
     idx_sample = np.random.choice(idx_sample, 2000, replace=False)
-
     x_train = x_train.iloc[idx_sample]
     y_train = y_train.iloc[idx_sample]
 
-    nominals = ['x1', 'x4', 'x6', 'x7', 'x8', 'x9']
+    # create model
+    nominal = ['x1', 'x4', 'x6', 'x7', 'x8', 'x9']
     ord_rat = ['x5', 'x2', 'x3', 'x10', 'x11', 'x12']
+    svc = Model(nominal, c=1)
 
-    pp = PreProcess(nominal=nominals)
-    pp.nominal2binary(x_train)
-    pp.normalization_init(x_train)
+    # train model
+    svc.fit(x_train, y_train)
 
-    x_train = pp.normalize(x_train)
-    x_val = pp.normalize(x_val)
-
-    print(pd.DataFrame(x_train).columns.values)
-    print(pd.DataFrame(y_train).columns.values)
-
-    svc = LinearSVC(c=1, verbose=True)
-    svc.fit(x_train, y_train, epochs=int(1e5))
-
+    # val model
     val_pred = svc.predict(x_val)
     print(np.asarray(val_pred == y_val).mean())
+    print(f1_score(y_val, val_pred))
 
     from sklearn import metrics
 
-    print(f1_score(y_val, val_pred))
     print(metrics.f1_score(y_val, val_pred))
     print(metrics.recall_score(y_val, val_pred))
     print(metrics.accuracy_score(y_val, val_pred))
