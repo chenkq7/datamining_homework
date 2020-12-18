@@ -186,14 +186,111 @@ class LinearSVC:
         self._predict_cache = self._b + np.dot(self._w, self._gram)
 
 
+class PreProcess:
+    def __init__(self, nominal):
+        self.nominal = tuple(nominal)
+        self.columns = np.asarray([])
+        self.normalization_params = {}
+
+    def state_dict(self):
+        ret = {
+            'nominal': self.nominal,
+            'columns': self.columns.tolist(),
+            'dict': self.normalization_params
+        }
+        return ret
+
+    @staticmethod
+    def load(state_dict):
+        self = PreProcess(state_dict['nominal'])
+        self.columns = state_dict['columns']
+        self.normalization_params = state_dict['dict']
+        return self
+
+    def nominal2binary(self, data_):
+        """
+        :param data: pd.DataFrame.
+        :param nominals: columns whose data type is Nominal.
+        :return: convert Nominal data type to one-hot binary data type.
+        """
+        data = data_.copy()
+        assert isinstance(data, pd.DataFrame)
+        for nom in self.nominal:
+            max_value = max(data[nom])
+            if max_value >= 2:
+                for v in range(max_value + 1):
+                    data.loc[:, nom + '_' + str(v)] = (data.loc[:, nom] == v).astype(int)
+        columns = []
+        for col in data.columns.values:
+            if col not in self.nominal:
+                columns.append(col)
+        return data[columns]
+
+    def normalization_init(self, x_train):
+        self.columns = np.asarray(x_train.columns.values)
+        for col in x_train.columns.values:
+            if str(col).startswith(tuple(self.nominal)):
+                max_v = np.max(x_train[col])
+                min_v = np.min(x_train[col])
+                self.normalization_params[str(col)] = (min_v, max_v)
+            else:
+                mean = np.mean(x_train[col])
+                std = np.std(x_train[col])
+                self.normalization_params[str(col)] = (mean, std)
+
+    def normalize(self, x_):
+        x = x_.copy()
+        assert (self.columns == np.asarray(x.columns.values)).all()
+        for col in x.columns.values:
+            if str(col).startswith(tuple(self.nominal)):
+                min_v, max_v = self.normalization_params[str(col)]
+                if min_v != max_v:
+                    x[col] = (x[col] - min_v) / (max_v - min_v)
+            else:
+                mean, std = self.normalization_params[str(col)]
+                if std != 0:
+                    x[col] = (x[col] - mean) / std
+        return x
+
+
+class Model:
+    def __init__(self, nominal=(), c=1, epsilon=1e-3, verbose=False):
+        self.pp = PreProcess(nominal)
+        self.svc = LinearSVC(c, epsilon=epsilon, verbose=veose)
+
+    def state_model(self):
+        ret = {
+            'pp': self.pp.state_dict(),
+            'svc': self.svc.state_dict(),
+        }
+        return ret
+
+    @staticmethod
+    def load(state_dict):
+        self = Model()
+        self.pp = PreProcess.load(state_dict['pp'])
+        self.svc = LinearSVC.load(state_dict['svc'])
+        return self
+
+    def fit(self, x, y):
+        x = self.pp.nominal2binary(x)
+        self.pp.normalization_init(x)
+        x = self.pp.normalize(x)
+        self.svc.fit(x, y)
+
+    def predict(self, x):
+        x = self.pp.nominal2binary(x)
+        x = self.pp.normalize(x)
+        return self.predict(x)
+
+
 if __name__ == '__main__':
     data = pd.read_csv("./dataset/线下/svm/svm_training_set.csv")
     idx_train = np.random.choice(len(data), int(9 / 10 * len(data)))
     idx_val = list(set(list(range(len(data)))).difference(idx_train))
-    nominals = ['x1', 'x4', 'x6', 'x7', 'x8', 'x9']
-    ord_rat = ['x5', 'x2', 'x3', 'x10', 'x11', 'x12']
-    x_train = nominal2binary(data.iloc[idx_train, :12], nominals=nominals)
-    x_val = nominal2binary(data.iloc[idx_val, :12], nominals=nominals)
+    x_train = data.iloc[idx_train, :12]
+    x_val = data.iloc[idx_val, :12]
+
     y_train = data.iloc[idx_train, 12]
     y_val = data.iloc[idx_val, 12]
 
@@ -206,18 +303,15 @@ if __name__ == '__main__':
     x_train = x_train.iloc[idx_sample]
     y_train = y_train.iloc[idx_sample]
 
-    for col in x_train.columns.values:
-        if str(col).startswith(tuple(nominals)):
-            max_v = np.max(x_train[col])
-            min_v = np.min(x_train[col])
-            if max_v != min_v:
-                x_train[col] = (x_train[col] - min_v) / (max_v - min_v)
-                x_val[col] = (x_val[col] - min_v) / (max_v - min_v)
-        else:
-            mean = np.mean(x_train[col])
-            std = np.std(x_train[col])
-            x_train[col] = (x_train[col] - mean) / std
-            x_val[col] = (x_val[col] - mean) / std
+    nominals = ['x1', 'x4', 'x6', 'x7', 'x8', 'x9']
+    ord_rat = ['x5', 'x2', 'x3', 'x10', 'x11', 'x12']
+
+    pp = PreProcess(nominal=nominals)
+    pp.nominal2binary(x_train)
+    pp.normalization_init(x_train)
+
+    x_train = pp.normalize(x_train)
+    x_val = pp.normalize(x_val)
 
     print(pd.DataFrame(x_train).columns.values)
     print(pd.DataFrame(y_train).columns.values)
