@@ -2,23 +2,23 @@ import numpy as np
 import pandas as pd
 
 
-def nominal2binary(data, nominals):
-    """
-    :param data: pd.DataFrame.
-    :param nominals: columns whose data type is Nominal.
-    :return: convert Nominal data type to one-hot binary data type.
-    """
-    assert isinstance(data, pd.DataFrame)
-    for nominal in nominals:
-        max_value = max(data[nominal])
-        if max_value >= 2:
-            for v in range(max_value + 1):
-                data.loc[:, nominal + '_' + str(v)] = (data.loc[:, nominal] == v).astype(int)
-    columns = []
-    for col in data.columns.values:
-        if col not in nominals:
-            columns.append(col)
-    return data[columns]
+# def nominal2binary(data, nominals):
+#     """
+#     :param data: pd.DataFrame.
+#     :param nominals: columns whose data type is Nominal.
+#     :return: convert Nominal data type to one-hot binary data type.
+#     """
+#     assert isinstance(data, pd.DataFrame)
+#     for nominal in nominals:
+#         max_value = max(data[nominal])
+#         if max_value >= 2:
+#             for v in range(max_value + 1):
+#                 data.loc[:, nominal + '_' + str(v)] = (data.loc[:, nominal] == v).astype(int)
+#     columns = []
+#     for col in data.columns.values:
+#         if col not in nominals:
+#             columns.append(col)
+#     return data[columns]
 
 
 def f1_score(y_true, y_pred, pos_label=1, labels=None):
@@ -209,11 +209,10 @@ class PreProcess:
 
     def nominal2binary(self, data_):
         """
-        :param data: pd.DataFrame.
-        :param nominals: columns whose data type is Nominal.
+        :param data_: pd.DataFrame.
         :return: convert Nominal data type to one-hot binary data type.
         """
-        data = data_.copy()
+        data = pd.DataFrame(data_).copy()
         assert isinstance(data, pd.DataFrame)
         for nom in self.nominal:
             max_value = max(data[nom])
@@ -232,11 +231,11 @@ class PreProcess:
             if str(col).startswith(tuple(self.nominal)):
                 max_v = np.max(x_train[col])
                 min_v = np.min(x_train[col])
-                self.normalization_params[str(col)] = (min_v, max_v)
+                self.normalization_params[str(col)] = np.asarray([min_v, max_v]).tolist()
             else:
                 mean = np.mean(x_train[col])
                 std = np.std(x_train[col])
-                self.normalization_params[str(col)] = (mean, std)
+                self.normalization_params[str(col)] = np.asarray([mean, std]).tolist()
 
     def normalize(self, x_):
         x = x_.copy()
@@ -256,7 +255,7 @@ class PreProcess:
 class Model:
     def __init__(self, nominal=(), c=1, epsilon=1e-3, verbose=False):
         self.pp = PreProcess(nominal)
-        self.svc = LinearSVC(c, epsilon=epsilon, verbose=veose)
+        self.svc = LinearSVC(c, epsilon=epsilon, verbose=verbose)
 
     def state_model(self):
         ret = {
@@ -276,18 +275,19 @@ class Model:
         x = self.pp.nominal2binary(x)
         self.pp.normalization_init(x)
         x = self.pp.normalize(x)
+        print(pd.DataFrame(x).columns.values)
         self.svc.fit(x, y, epochs=epochs)
 
     def predict(self, x):
         x = self.pp.nominal2binary(x)
         x = self.pp.normalize(x)
-        return self.predict(x)
+        return self.svc.predict(x)
 
 
 if __name__ == '__main__':
     # div data into trainset valset
     data = pd.read_csv("./dataset/线下/svm/svm_training_set.csv")
-    idx_train = np.random.choice(len(data), int(9 / 10 * len(data)))
+    idx_train = np.random.choice(len(data), int(9 / 10 * len(data)), replace=False)
     x_train = data.iloc[idx_train, :12]
     y_train = data.iloc[idx_train, 12]
     idx_val = list(set(list(range(len(data)))).difference(idx_train))
@@ -307,11 +307,11 @@ if __name__ == '__main__':
 
     # create model
     nominal = ['x1', 'x4', 'x6', 'x7', 'x8', 'x9']
-    ord_rat = ['x5', 'x2', 'x3', 'x10', 'x11', 'x12']
-    svc = Model(nominal, c=1)
+    # ord_rat = ['x5', 'x2', 'x3', 'x10', 'x11', 'x12']
+    svc = Model(nominal, c=1, verbose=True)
 
     # train model
-    svc.fit(x_train, y_train)
+    svc.fit(x_train, y_train, epochs=int(2e5))
 
     # val model
     val_pred = svc.predict(x_val)
