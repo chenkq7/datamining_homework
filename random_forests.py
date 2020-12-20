@@ -417,18 +417,19 @@ def test(csv_data_path, model_state_dict, result_path):
 if __name__ == '__main__':
     import argparse
 
-    parser = argparse.ArgumentParser(description='random_forests train or test.')
+    parser = argparse.ArgumentParser(description='random_forests train or test.',
+                                     formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--train', action='store_true', help='train model')
 
     train_group = parser.add_argument_group('train model')
     train_group.add_argument('--x_path', help='x csv data path')
     train_group.add_argument('--y_path', help='y csv data path')
-    train_group.add_argument('--train_rate', type=float, help='train data rate. if not specified,use suggested num.',
+    train_group.add_argument('--train_rate', type=float, help='train data rate.',
                              default=0.9)
     train_group.add_argument('--tree_num', type=int,
-                             help='the tree num of the random forest. if not specified,use suggested num.', default=200)
+                             help='the tree num of the random forest.', default=200)
     train_group.add_argument('--attr_num', type=int,
-                             help='the attr num per tree has. if not specified,use suggested num.', default=None)
+                             help='the attr num per tree has. if not specified, use suggested num.', default=None)
     train_group.add_argument('--save_model', help='save model to file SAVE_MODEL', default=None)
 
     parser.add_argument('--test', action='store_true', help='test model')
