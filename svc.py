@@ -2,25 +2,6 @@ import numpy as np
 import pandas as pd
 
 
-# def nominal2binary(data, nominals):
-#     """
-#     :param data: pd.DataFrame.
-#     :param nominals: columns whose data type is Nominal.
-#     :return: convert Nominal data type to one-hot binary data type.
-#     """
-#     assert isinstance(data, pd.DataFrame)
-#     for nominal in nominals:
-#         max_value = max(data[nominal])
-#         if max_value >= 2:
-#             for v in range(max_value + 1):
-#                 data.loc[:, nominal + '_' + str(v)] = (data.loc[:, nominal] == v).astype(int)
-#     columns = []
-#     for col in data.columns.values:
-#         if col not in nominals:
-#             columns.append(col)
-#     return data[columns]
-
-
 def f1_score(y_true, y_pred, pos_label=1, labels=None):
     y_true = np.asarray(y_true)
     y_pred = np.asarray(y_pred)
