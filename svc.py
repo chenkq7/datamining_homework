@@ -317,9 +317,3 @@ if __name__ == '__main__':
     val_pred = svc.predict(x_val)
     print(np.asarray(val_pred == y_val).mean())
     print(f1_score(y_val, val_pred))
-
-    from sklearn import metrics
-
-    print(metrics.f1_score(y_val, val_pred))
-    print(metrics.recall_score(y_val, val_pred))
-    print(metrics.accuracy_score(y_val, val_pred))

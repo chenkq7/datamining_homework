@@ -154,7 +154,7 @@ if __name__ == '__main__':
         return data[columns]
 
 
-    data = pd.read_csv("./dataset/线下/svm/svm_training_set.csv")
+    data = pd.read_csv("../dataset/线下/svm/svm_training_set.csv")
     idx_train = np.random.choice(len(data), int(9 / 10 * len(data)))
     idx_val = list(set(list(range(len(data)))).difference(idx_train))
     nominals = ['x1', 'x4', 'x6', 'x7', 'x8', 'x9']

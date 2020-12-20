@@ -347,7 +347,7 @@ class RandomForest:
         right, pred = df[self._label], df[self._pred]
         return f1_score(right, pred)
 
-    def f1_score_on_oob(self):
+    def f1_score_on_oob(self, y_data):
         """
         :return: the Out-Of-Bag(oob) f1 score.
         """
@@ -378,19 +378,70 @@ def load_state_dict(filename):
         return json.loads(js)
 
 
-if __name__ == '__main__':
-    x_data = pd.read_csv("./dataset/线下/rf/x_train.csv")
-    y_data = pd.read_csv("./dataset/线下/rf/y_train.csv")
+def train(x_data_path="./dataset/线下/rf/x_train.csv", y_data_path="./dataset/线下/rf/y_train.csv", train_data_rate=0.9,
+          tree_num=200, attr_num=None, save_model=None):
+    x_data = pd.read_csv(x_data_path)
+    y_data = pd.read_csv(y_data_path)
 
-    idx_train = np.random.choice(len(x_data), len(x_data) - 500)
+    idx_train = np.random.choice(len(x_data), int(len(x_data) * train_data_rate), replace=False)
     idx_val = list(set(list(range(len(x_data)))).difference(set(idx_train)))
     x_train = x_data.iloc[idx_train]
     y_train = y_data.iloc[idx_train]
     x_val = x_data.iloc[idx_val]
     y_val = y_data.iloc[idx_val]
 
-    rf = RandomForest(200)
+    rf = RandomForest(tree_num, attr_num)
     rf = rf.fit(x_train, y_train)
-    print(rf.f1_score_on_oob())
-    print(rf.f1_score(x_val, y_val))
-    print(rf.f1_score(x_data, y_data))
+    print("oob f1:", rf.f1_score_on_oob(y_train))
+    print("val f1:", rf.f1_score(x_val, y_val))
+    print("whole dataset f1:", rf.f1_score(x_data, y_data))
+
+    if save_model is not None:
+        save_state_dict(rf.state_dict(), save_model)
+    return rf
+
+
+def test(csv_data_path, model_state_dict, result_path):
+    x_data = pd.read_csv(csv_data_path)
+    sd = load_state_dict(model_state_dict)
+    rf = RandomForest.load(sd)
+    pred = rf.predict(x_data)
+    result = pd.DataFrame(pred, columns=[rf._id, rf._pred])
+    if result_path is not None:
+        if not str(result_path).endswith('.csv'):
+            result_path = str(result_path) + '.csv'
+        result.to_csv(result_path, index=False)
+    return result
+
+
+if __name__ == '__main__':
+    import argparse
+
+    parser = argparse.ArgumentParser(description='random_forests train or test.')
+    parser.add_argument('--train', action='store_true', help='train model')
+
+    train_group = parser.add_argument_group('train model')
+    train_group.add_argument('--x_path', help='x csv data path')
+    train_group.add_argument('--y_path', help='y csv data path')
+    train_group.add_argument('--train_rate', type=float, help='train data rate. if not specified,use suggested num.',
+                             default=0.9)
+    train_group.add_argument('--tree_num', type=int,
+                             help='the tree num of the random forest. if not specified,use suggested num.', default=200)
+    train_group.add_argument('--attr_num', type=int,
+                             help='the attr num per tree has. if not specified,use suggested num.', default=None)
+    train_group.add_argument('--save_model', help='save model to file SAVE_MODEL', default=None)
+
+    parser.add_argument('--test', action='store_true', help='test model')
+    test_group = parser.add_argument_group('test model')
+    test_group.add_argument('--data_path', help='test csv data path')
+    test_group.add_argument('--model_path', help='saved model path')
+    test_group.add_argument('--result_path', help='result csv path')
+
+    args = parser.parse_args()
+
+    if args.train:
+        train(args.x_path, args.y_path, args.train_rate, args.tree_num, args.attr_num, args.save_model)
+    elif args.test:
+        test(args.data_path, args.model_path, args.result_path)
+    else:
+        parser.print_help()
