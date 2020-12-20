@@ -257,7 +257,7 @@ class Model:
         self.pp = PreProcess(nominal)
         self.svc = LinearSVC(c, epsilon=epsilon, verbose=verbose)
 
-    def state_model(self):
+    def state_dict(self):
         ret = {
             'pp': self.pp.state_dict(),
             'svc': self.svc.state_dict(),
@@ -284,10 +284,11 @@ class Model:
         return self.svc.predict(x)
 
 
-if __name__ == '__main__':
+def train(train_set="./dataset/线下/svm/svm_training_set.csv", train_rate=0.9, sample_num=2000, C=1, epochs=int(1e4),
+          save_model=None, verbose=True):
     # div data into trainset valset
-    data = pd.read_csv("./dataset/线下/svm/svm_training_set.csv")
-    idx_train = np.random.choice(len(data), int(9 / 10 * len(data)), replace=False)
+    data = pd.read_csv(train_set)
+    idx_train = np.random.choice(len(data), int(train_rate * len(data)), replace=False)
     x_train = data.iloc[idx_train, :12]
     y_train = data.iloc[idx_train, 12]
     idx_val = list(set(list(range(len(data)))).difference(idx_train))
@@ -301,19 +302,84 @@ if __name__ == '__main__':
     y_pos_idx_sam = np.arange(len(y_train))[y_train > 0]
     y_neg_idx_sam = np.random.choice(y_neg_idx, len(y_pos_idx_sam), replace=False)
     idx_sample = np.concatenate((y_neg_idx_sam, y_pos_idx_sam))
-    idx_sample = np.random.choice(idx_sample, 2000, replace=False)
+    idx_sample = np.random.choice(idx_sample, sample_num, replace=False)
     x_train = x_train.iloc[idx_sample]
     y_train = y_train.iloc[idx_sample]
 
     # create model
     nominal = ['x1', 'x4', 'x6', 'x7', 'x8', 'x9']
-    # ord_rat = ['x5', 'x2', 'x3', 'x10', 'x11', 'x12']
-    svc = Model(nominal, c=1, verbose=True)
+    ord_rat = ['x5', 'x2', 'x3', 'x10', 'x11', 'x12']
+    svc = Model(nominal, c=C, verbose=verbose)
 
     # train model
-    svc.fit(x_train, y_train, epochs=int(2e5))
+    svc.fit(x_train, y_train, epochs=epochs)
 
     # val model
     val_pred = svc.predict(x_val)
-    print(np.asarray(val_pred == y_val).mean())
-    print(f1_score(y_val, val_pred))
+    print("val mean():", np.asarray(val_pred == y_val).mean())
+    print("val f1:", f1_score(y_val, val_pred))
+
+    # save model
+    if save_model is not None:
+        save_filename = str(save_model)
+        if not save_filename.endswith('.json'):
+            save_filename += '.json'
+        with open(save_filename, 'w') as f:
+            import json
+            sd = svc.state_dict()
+            js = json.dumps(sd)
+            f.write(js)
+
+    return svc
+
+
+def test(test_set, model_path, result_path):
+    # data
+    data = pd.read_csv(test_set)
+    into_data = data.iloc[:, :12]
+
+    # model
+    import json
+    with open(model_path, 'r') as f:
+        js = f.read()
+        sd = json.loads(js)
+    svc = Model.load(sd)
+
+    # pred
+    pred = svc.predict(into_data)
+    data['pred'] = pred
+    data.to_csv(result_path, index=False)
+
+    # ret
+    return pred
+
+
+if __name__ == '__main__':
+    import argparse
+
+    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument('--train', action='store_true')
+    parser.add_argument('--test', action='store_true')
+
+    train_group = parser.add_argument_group('train model')
+    train_group.add_argument('--train_set', help='train dataset path')
+    train_group.add_argument('--train_rate', type=float, help='the rate of (train num)/(tot num). other is val set.',
+                             default=0.9)
+    train_group.add_argument('--sample_num', type=int, help='sample num for training.', default=2000)
+    train_group.add_argument('--C', type=float, help='the C param in svc', default=1.0)
+    train_group.add_argument('--epochs', type=int, help='max epochs for svc fitting', default=int(1e5))
+    train_group.add_argument('--save_model', help='if not None, SAVE_MODEL will be the file to save the model')
+    train_group.add_argument('--verbose', action='store_true', default=False)
+
+    test_group = parser.add_argument_group('test model')
+    test_group.add_argument("--test_set", help='test set path')
+    test_group.add_argument("--model_path", help='saved model path')
+    test_group.add_argument("--result_path", help='result file')
+
+    args = parser.parse_args()
+    if args.train:
+        train(args.train_set, args.train_rate, args.sample_num, args.C, args.epochs, args.save_model, args.verbose)
+    elif args.test:
+        test(args.test_set, args.model_path, args.result_path)
+    else:
+        parser.print_help()
