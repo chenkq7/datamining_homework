@@ -120,3 +120,13 @@ main函数主要负责命令行参数的解析和命令分发.
 | train(train_set, train_rate, sample_num, C,epochs,save_model, verbose) | train_set: 训练集csv文件路径<br />train_rate: float训练数据和val数据划分比例.<br />sample_num: int 从训练数据中采样数目用于训练<br />C: int 软间隔参数C<br />epochs: int 最大迭代次数<br />save_model: 保存训练模型的路径<br />verbose: int 打印详细训练信息 | Model对象              | 训练模型                                            |
 | test(test_set, model_path, result_path)                      | test_set: 测试集csv文件路径<br />model_path: 保存的模型参数路径<br />result_path: 目标保存预测结果的路径 | pd.DataFrame: 预测结果 | 将预测结果添加到文件最后一列,并保存到result_path处. |
 
+train函数细节说明:
+
+1. train_rate指明训练集合占总数据集的比例,其他数据作为验证集.
+
+一些问题:
+
+1. 训练集过大,个人实现版本中由于内存限制无法一次性利用所有样本.原因在于需要cache核函数计算结果.大小是sizeof(float)\*data_num\*data_num.对于2w+条样本,需要一次性申请大约4G+的内存.观察sklearn版本的svc训练过程中并没有申请如此巨大的空间.更优秀的cache算法或能够缓解空间占用高的问题.但实现起来代码也会更加复杂.鉴于cache并不是本次作业的重点,所以没有花费大精力去实现.
+2. 过多样本时,个人实现SMO版本收敛缓慢.原因可能在于 1.实现中的第二个alpha的启发式选择还不够优秀.仅使用了随机选择.显然还不够好. 2.收敛的判别准则过于严苛,仅使用违反KKT条件的程度作为判别条件.且训练后期大部分情况违反程度在0.03附近,而低于0.0001则很困难,,或许数据量较大时违反程度很难低于0.0001.或许可以引入更多的更优秀的收敛判别准则.
+3. 但幸运的是,在该问题的训练集上进行部分采样和使用原数据集的效果相当.且能够加速训练时间.train函数的sample_num参数指明最终sample的小训练集的大小.
+
